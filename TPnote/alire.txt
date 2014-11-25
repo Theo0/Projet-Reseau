@@ -1,0 +1,15 @@
+TP NOTE RESEAUX
+
+Theo CHAMBON
+Numero Etudiant : 20100514
+
+L'application, basé sur un serveur TCP concurrent et un client TCP, fonctionne et permet la récupération de fichier.
+Le fichier doit être situé dans le même dossier que le serveur.
+
+Le client pour se connecter doit passer en paramètre l'addresse IP du serveur (le port est fixé dans le code).
+
+L'affichage dans le serveur de l'IP du client donne dans certains 0.0.0.0.0, je n'ai pas trouvé la source du problème.
+
+Il y a un warning lors de la compilation du serveur (lié a la conversion du fichier en char[]).
+
+Tout le reste est fonctionnel. Je n'ai pas pu tester avec des fichiers de très grande taille.

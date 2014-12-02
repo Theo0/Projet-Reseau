@@ -15,11 +15,15 @@
 
 using namespace std;
 
-void *connection_handler(void *);
+
 pthread_t thread_id;
 std::mutex monlock;
+mutex monlock2, monlock3;
 
-int *envoi(void *descBrCv){
+void *connection_handler(void *);
+
+int *envoi(void * sock){
+  int descBrCv = *((int*)sock);
   cout << "on entre en reception" << endl;
   monlock.lock();
   char tamponReception[100];
@@ -71,13 +75,18 @@ int *envoi(void *descBrCv){
 }
 
 
-int reception(int descBrCv){
+int *reception(void * sock){
+
+  cout << "on entre en envoi" << endl;
+   int descBrCv = *((int*)sock);
   monlock.lock();
   char tamponNomFichier[200];
   char tamponReceptionFichier[100000];
+  memset(tamponNomFichier, 0, 200);
+   memset(tamponNomFichier, 0, 100000);
       int reception = recv(descBrCv, tamponNomFichier, sizeof(tamponNomFichier), 0);
-
-      if(!strcmp(tamponNomFichier, "error")){
+      cout << "DEBUGAGE" <<tamponNomFichier << "DEBUGGAGE" <<endl;
+      //if(!strcmp(tamponNomFichier, "error")){
         if(reception == -1){ cout << "Echec de la reception nom du fichier" << endl;}
         else{
           int reception = recv(descBrCv, tamponReceptionFichier, sizeof(tamponReceptionFichier), 0);
@@ -96,7 +105,7 @@ int reception(int descBrCv){
             cout << "\n" << endl;
           }
         }
-      }
+      //}
 }
 
 
@@ -123,8 +132,9 @@ int descBrCv;
 while( (descBrCv = accept(descBrPub, (struct sockaddr *)&brCv, (socklen_t*)&lgbrCv)) )
 {
     puts("Connection accepted");
-         
-        if( pthread_create( &thread_id , NULL ,  connection_handler , (void*) &descBrCv) < 0)
+         int *arg = (int*)malloc(sizeof(*arg));
+         *arg = descBrCv;
+        if( pthread_create( &thread_id , NULL ,  connection_handler , arg) < 0)
         {
             perror("could not create thread");
             return 1;
@@ -136,27 +146,29 @@ if(descBrCv == -1) {
 
 } 
 
-void *connection_handler(void *descBrCv){
+void *connection_handler(void * descBrCv){
     //création du tampons
 
   char tamponOrdre[1];
-  int sock = *(int*)descBrCv;
+  int sock = *((int*)descBrCv);
   int ordre;
 
 
    while( (ordre = recv(sock , tamponOrdre , sizeof(tamponOrdre) , 0)) > 0 )  
-  {
-    cout << atoi(tamponOrdre) << endl;
+  { monlock.lock();
+    int *socket = (int*)malloc(sizeof(*socket));
+    *socket = sock;
+    cout << "l158" << atoi(tamponOrdre) << "l158"<< endl;
     if(atoi(tamponOrdre) == 0){
         
-           if( pthread_create( &thread_id , NULL ,  envoi , sock) < 0)
+           if( pthread_create( &thread_id , NULL ,  envoi ,  socket) < 0)
             {
                 perror("could not create thread");
                 return 1;
             }
     }
     else if(atoi(tamponOrdre) == 1){
-           if( pthread_create( &thread_id , NULL ,  reception , sock) < 0)
+           if( pthread_create( &thread_id , NULL ,  reception , socket) < 0)
             {
                 perror("could not create thread");
                 return 1;
@@ -165,7 +177,8 @@ void *connection_handler(void *descBrCv){
     else{
           cout << "Instruction inconnue reçue : " << tamponOrdre << endl;
         }
-    memset(tamponOrdre, 0, 10);    
+    memset(tamponOrdre, 0, 10);   
+    monlock.unlock();
  }
 
     if(ordre == 0)
@@ -177,7 +190,6 @@ void *connection_handler(void *descBrCv){
     {
         perror("recv failed");
     }
-         
-    return 0;
+    pthread_exit(0);     
   
   }

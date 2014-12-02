@@ -9,4 +9,4 @@ clientTCP : clientTCP.cpp sock.o sockdist.o
 	g++ clientTCP.cpp sock.o sockdist.o -fpermissive -o clientTCP
 
 serveurTCP : serveurTCP.cpp sock.o sockdist.o
-	g++ serveurTCP.cpp sock.o sockdist.o -fpermissive -lpthread -o serveurTCP
+	g++ serveurTCP.cpp sock.o sockdist.o -fpermissive -lpthread -std=c++11 -o serveurTCP

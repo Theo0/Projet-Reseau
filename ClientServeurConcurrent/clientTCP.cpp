@@ -12,6 +12,10 @@
 
 using namespace std;
 
+void envoi(int descBrCli){}
+
+void reception(int descBrCli){}
+
 int main(int argc, char *argv[]){
 
 if(argc != 2)

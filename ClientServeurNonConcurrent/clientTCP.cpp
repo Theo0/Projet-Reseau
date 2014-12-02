@@ -48,7 +48,7 @@ char tamponReception[100000];
 
 
 	while(1){
-		cout << "Entrez reception pour recevoir un fichier, envoi pour en déposer un, exit pour quitter : " ;
+		cout << "Entrez 0 pour recevoir un fichier, 1 pour en déposer un, exit pour quitter : " ;
 		cin >> tamponOrdre;
 
 		//Vérification de la demande d'arrêt ("stop" entré au clavier par l'utlisateur)
@@ -59,7 +59,7 @@ char tamponReception[100000];
 		int envoi = send(descBrCli, tamponOrdre, strlen(tamponOrdre), 0);
 		if(envoi == -1){ cout << "Echec de l'envoi de la commande" << endl; exit(1);}
 
-		if(!strcmp(tamponOrdre, "reception")){
+		if(atoi(tamponOrdre) == 0){
 			cout << "On rente dans recep" << endl;
 			//RECEPTION DE FICHIER PAR LE CLIENT *************************************************************
 			cout << "Entrez le nom du fichier souhaité (exit pour quitter) : ";
@@ -100,7 +100,7 @@ char tamponReception[100000];
 			}
 			//FIN RECEPTION DE FICHIER PAR LE CLIENT *********************************************************
 		}
-		else if(!strcmp(tamponOrdre, "envoi")){
+		else if(atoi(tamponOrdre) == 1){
 			//ENVOI DE FICHIER DU CLIENT VERS LE SERVEUR ******************************************************
 
 			//L'utilisateur entre le chemin du fichier qu'il souahite envoyer

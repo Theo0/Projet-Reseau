@@ -1,9 +1,0 @@
-TP NOTE RESEAUX
-
-Theo CHAMBON
-Numero Etudiant : 20100514
-
-L'application, basé sur un serveur TCP concurrent et un client TCP, fonctionne et permet la récupération de fichier.
-Le fichier doit être situé dans le même dossier que le serveur.
-
-Le client 

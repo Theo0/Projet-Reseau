@@ -17,15 +17,11 @@ using namespace std;
 
 
 pthread_t thread_id;
-std::mutex monlock;
-mutex monlock2, monlock3;
+
 
 void *connection_handler(void *);
 
-int *envoi(void * sock){
-  int descBrCv = *((int*)sock);
-  cout << "on entre en reception" << endl;
-  monlock.lock();
+int envoi(int descBrCv){
   char tamponReception[100];
   char tamponEnvoi[100000];
 
@@ -37,7 +33,7 @@ int *envoi(void * sock){
     string part(tamponReception);
     string file(part.substr(0, reception));
     cout << "Nom du fichier :" << file << endl;
-    monlock.unlock();
+
     //On essaie d'ouvrir le fichier souhaité par le client
     FILE *fichier = NULL;
     fichier = fopen(file.c_str(),  "r");
@@ -75,22 +71,14 @@ int *envoi(void * sock){
 }
 
 
-int *reception(void * sock){
-
-  cout << "on entre en envoi" << endl;
-   int descBrCv = *((int*)sock);
-  monlock.lock();
+int reception(int descBrCv){
   char tamponNomFichier[200];
   char tamponReceptionFichier[100000];
-  memset(tamponNomFichier, 0, 200);
-   memset(tamponNomFichier, 0, 100000);
       int reception = recv(descBrCv, tamponNomFichier, sizeof(tamponNomFichier), 0);
-      cout << "DEBUGAGE" <<tamponNomFichier << "DEBUGGAGE" <<endl;
-      //if(!strcmp(tamponNomFichier, "error")){
+      if(!strcmp(tamponNomFichier, "error")){
         if(reception == -1){ cout << "Echec de la reception nom du fichier" << endl;}
         else{
           int reception = recv(descBrCv, tamponReceptionFichier, sizeof(tamponReceptionFichier), 0);
-          monlock.unlock();
           if(reception == -1){ cout << "Echec de la reception du fichier" << endl;}
           else{
             //Création du fichier de destination
@@ -105,7 +93,7 @@ int *reception(void * sock){
             cout << "\n" << endl;
           }
         }
-      //}
+      }
 }
 
 
@@ -148,38 +136,29 @@ if(descBrCv == -1) {
 
 void *connection_handler(void * descBrCv){
     //création du tampons
-
   char tamponOrdre[1];
   int sock = *((int*)descBrCv);
   int ordre;
 
 
-   while( (ordre = recv(sock , tamponOrdre , sizeof(tamponOrdre) , 0)) > 0 )  
-  { monlock.lock();
-    int *socket = (int*)malloc(sizeof(*socket));
-    *socket = sock;
-    cout << "l158" << atoi(tamponOrdre) << "l158"<< endl;
-    if(atoi(tamponOrdre) == 0){
-        
-           if( pthread_create( &thread_id , NULL ,  envoi ,  socket) < 0)
-            {
-                perror("could not create thread");
-                return 1;
-            }
+   while(1)
+  { 
+    int demordre = send(sock, "demande-ordre", sizeof("demande-ordre"), 0);
+    if(demordre < 0){cout << "echec demande ordre" << endl;}
+    else {cout << "camarche";}
+    int recordre = recv(sock, tamponOrdre, sizeof(tamponOrdre),0);
+    if(recordre < 0){cout << "echec reception ordre" << endl;}
+    /*if(atoi(tamponOrdre) == 0){
+       envoi(descBrCv);   
     }
     else if(atoi(tamponOrdre) == 1){
-           if( pthread_create( &thread_id , NULL ,  reception , socket) < 0)
-            {
-                perror("could not create thread");
-                return 1;
-            }
+      reception(descBrCv);
     }
     else{
           cout << "Instruction inconnue reçue : " << tamponOrdre << endl;
         }
-    memset(tamponOrdre, 0, 10);   
-    monlock.unlock();
- }
+    memset(tamponOrdre, 0, 10);  */ 
+  }
 
     if(ordre == 0)
     {

@@ -143,6 +143,8 @@ char tamponEnvoiFichier[100000];
 
 
 	while(1){
+		int rec = recv(descBrCli, tamponOrdre, sizeof(tamponOrdre), 0);
+		if(tamponOrdre == "demande-ordre"){cout << "prout" << endl;}
 		cout << "Entrez 0 pour recevoir un fichier, 1 pour en déposer un, exit pour quitter : " ;
 		cin >> tamponOrdre;
 

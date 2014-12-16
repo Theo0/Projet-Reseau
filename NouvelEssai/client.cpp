@@ -9,6 +9,7 @@
 #include <fcntl.h>
 #include <arpa/inet.h>
 #include <iostream>
+#include <errno.h>
 #include <cstdio>
 #include <vector>
 #include "sockdist.h"
@@ -17,6 +18,91 @@
 using namespace std;
 
 int descBrCli;
+
+typedef struct {
+    //Or whatever information that you need
+    int descBr;
+    char nom[100];
+} infoFichier;
+
+
+
+void* thread_envoi(void * args){
+
+	cout << "on est dans le nouveau thread" << endl;
+	//On récupère les arguments de la struct
+	char nomFichier[100];
+	infoFichier *arg = args;
+
+	strcpy(nomFichier, arg->nom);
+	cout << nomFichier << endl;
+
+	//on ouvre un pointeur sur le fichier choisi
+      		FILE *fichierenvoi = NULL;
+      		fichierenvoi = fopen(nomFichier,  "r");
+      		//On vérifie que le fichier existe bien
+      		if (fichierenvoi == NULL){
+      			cout << "Le fichier n'existe pas" << endl;
+      			exit(1);
+      			pthread_exit((void *)1);
+      		}
+      		//On transforme le fichier afin de pouvoir l'envoyer via send
+	      	fseek(fichierenvoi, 0, SEEK_END);
+	        long fsize = ftell(fichierenvoi);
+	        fseek(fichierenvoi, 0, SEEK_SET);
+	        char *string = malloc(fsize + 1);
+	      	fread(string, fsize, 1, fichierenvoi);
+	      	string[fsize] = 0;
+
+			int envoi = send(arg->descBr, string, strlen(string), 0);
+	      	if(envoi == -1){
+	      		cout << "echec lors de l'envoi du fichier" << endl;
+	      		cout << "ERREUR : " << strerror(errno) << endl;
+	      		exit(1);
+	      	}
+	      	cout <<"fichier bien envoyé" << endl;
+
+	      	
+			
+	      	fclose(fichierenvoi);
+	      	pthread_exit(0);
+
+}
+
+void* thread_reception(void * args){
+
+	cout << "on est dans le nouveau thread" << endl;
+	//On récupère les arguments de la struct
+	char nomFichier[100];
+	infoFichier *arg = args;
+	strcpy(nomFichier, arg->nom);
+
+	char tamponReception[100000];
+				int reception = recv(arg->descBr, tamponReception, sizeof(tamponReception), 0);
+				if(reception < 0){
+					cout << "erreur reception fichier" << endl;	
+					exit(1);
+				}
+				else{
+					
+
+					//Création du fichier reçu
+					FILE *fichier = NULL;
+					fichier =  fopen (nomFichier, "w+");
+					if(fichier == NULL)
+					       { printf ("Erreur a l'ouverture du fichier\n"); }
+
+
+					//Remplissage du fichier reçu
+					fwrite(tamponReception,1,reception, fichier);
+					cout << "Fichier reçu" << endl;
+					fclose(fichier);
+					cout << "\n" << endl;
+				}
+				pthread_exit(0);
+
+
+}
 
 int main(int argc, char* argv[]){
 
@@ -30,8 +116,7 @@ int main(int argc, char* argv[]){
 	while(1){
 		//Creation de la boite de récéption 
 		Sock brCli(SOCK_STREAM, 0);
-		int descBrCli;
-
+		pthread_t thread_id;
 		//Test de la boite de récéption et récupération du descripteur
 		if(brCli.good())
 		  {descBrCli = brCli.getsDesc();}
@@ -76,33 +161,23 @@ int main(int argc, char* argv[]){
 				exit(1);
 			}
 
-
-
-			if(retour > 0){
-				char tamponReception[100000];
-				int reception = recv(descBrCli, tamponReception, sizeof(tamponReception), 0);
-				if(reception < 0){
-					cout << "erreur reception fichier" << endl;	
-					exit(1);
-				}
-				else{
-					cout << "Entrer le nom sous lequel vous souhaitez sauvegarder le fichier : " ;
+			cout << "Entrer le nom sous lequel vous souhaitez sauvegarder le fichier : " ;
 					char nomfichier[100];
 					cin >> nomfichier;
 
-					//Création du fichier reçu
-					FILE *fichier = NULL;
-					fichier =  fopen (nomfichier, "w+");
-					if(fichier == NULL)
-					       { printf ("Erreur a l'ouverture du fichier\n"); }
 
+			if(retour > 0){
+			infoFichier *args = malloc(sizeof *args);
+        	args->descBr = descBrCli;
+        	strcpy(args->nom, nomfichier);
 
-					//Remplissage du fichier reçu
-					fwrite(tamponReception,1,reception, fichier);
-					cout << "Fichier reçu" << endl;
-					fclose(fichier);
-					cout << "\n" << endl;
-				}
+        	if( pthread_create( &thread_id , NULL ,  thread_reception , args) < 0)
+        	{
+        	free(args);	
+            perror("Erreur création thread reception");
+            exit(1);
+        	}
+
 			}
 
 
@@ -110,20 +185,23 @@ int main(int argc, char* argv[]){
 		}
 		else if(ordre[0] == '1'){
 			char nomFichierEnvoi[100];
+			char nomFichierLocal[100];
 
 			int retour = 0;
 
 			cout << "Entrez le nom du fichier à envoyer : " << endl;
-			cin >> nomFichierEnvoi;
+			cin >> nomFichierLocal;
 
 			//on ouvre un pointeur sur le fichier choisi
       		FILE *fichierenvoi = NULL;
-      		fichierenvoi = fopen(nomFichierEnvoi,  "r");
+      		fichierenvoi = fopen(nomFichierLocal,  "r");
       		//On vérifie que le fichier existe bien
       		if (fichierenvoi == NULL){
       			cout << "Le fichier n'existe pas" << endl;
       			exit(1);
       		}
+
+      		close(fichierenvoi);
 
       		cout << "Entrez le nom sous lequel l'enregistrer  : " << endl;
 			cin >> nomFichierEnvoi;
@@ -139,27 +217,18 @@ int main(int argc, char* argv[]){
 				exit(1);
 			}
 
+			infoFichier *args = malloc(sizeof *args);
+        	args->descBr = descBrCli;
+        	strcpy(args->nom, nomFichierLocal);
 
+        	if( pthread_create( &thread_id , NULL ,  thread_envoi , args) < 0)
+        	{
+        	free(args);	
+            perror("Erreur création thread reception");
+            exit(1);
+        	}
 
-      		//On transforme le fichier afin de pouvoir l'envoyer via send
-	      	fseek(fichierenvoi, 0, SEEK_END);
-	        long fsize = ftell(fichierenvoi);
-	        fseek(fichierenvoi, 0, SEEK_SET);
-	        char *string = malloc(fsize + 1);
-	      	fread(string, fsize, 1, fichierenvoi);
-	      	string[fsize] = 0;
-
-	      	if(retour > 0){
-			envoi = send(descBrCli, string, strlen(string), 0);
-	      	if(envoi == -1){
-	      		cout << "echec lors de l'envoi du fichier" << endl;
-	      		exit(1);
-	      	}
-	      	cout << "fichier bien envoyé" << endl;
-			}
-	      	
-
-	      	fclose(fichierenvoi);
+        	
 		}
 
 	}

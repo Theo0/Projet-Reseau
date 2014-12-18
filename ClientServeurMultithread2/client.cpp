@@ -1,24 +1,20 @@
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <stdio.h>
-#include <stdlib.h>
+#include <iostream>
 #include <string.h>
+#include <sys/socket.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <stdio.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <fcntl.h>
-#include <arpa/inet.h>
-#include <iostream>
-#include <errno.h>
-#include <cstdio>
-#include <vector>
 #include "sockdist.h"
 #include "sock.h"
+#include <errno.h>
 
 using namespace std;
 
 int descBrCli;
 
+//CREATION DE LA STRUCTURE PERMETTANT DE PASSER LES INFORMATIONS DU FICHIER AU THREAD, AINSI QUE LE DESCRIPTEUR DE SOCKET
 typedef struct {
     int descBr;
     char nom[100];
@@ -29,54 +25,56 @@ typedef struct {
 
 void* thread_envoi(void * args){
 
-	cout << "on est dans le nouveau thread" << endl;
 	//On récupère les arguments de la struct
 	char nomFichier[100];
 	infoFichier *arg = args;
 
 	strcpy(nomFichier, arg->nom);
-	cout << nomFichier << endl;
-
-	//on ouvre un pointeur sur le fichier choisi
+	
+		//on ouvre un pointeur sur le fichier choisi
       		FILE *fichierenvoi = NULL;
       		fichierenvoi = fopen(nomFichier,  "r");
+
       		//On vérifie que le fichier existe bien
       		if (fichierenvoi == NULL){
       			cout << "Le fichier n'existe pas" << endl;
-      			exit(1);
-      			pthread_exit((void *)1);
+      			pthread_exit(1);
       		}
 
-      		char buffer[1024];
-      		int nbOctetEnvoye = 0;
-      		int termine = 0;
-      		int nbOctetLu = fread(buffer,sizeof(char),sizeof(buffer),fichierenvoi);
+      		//SI ON RECOIT -1, LE SERVEUR NOUS INDIQUE QUE LE NOM DE FICHIER EST DEJA PRIS
+      		int fic;
+      		int fichierExiste;
+      		
+      		if((fic = recv(arg->descBr, &fichierExiste, sizeof(int), 0)) == -1){
+      			cout << "Erreur reception" << endl;
+      			pthread_exit(1);
+      		}
+      		if(fichierExiste == -1){
+      			cout << "Ce nom de fichier existe déjà" << endl;
+      			pthread_exit(1);
+      		}
 
-      		if(nbOctetLu <= 0){
+
+      		char buffer[1024];
+      		int envoi = 0;
+
+      		//ON LIT LE PREMIER BLOC DU FICHIER
+      		int lit = fread(buffer,sizeof(char),sizeof(buffer),fichierenvoi);
+
+      		//SI ERREUR DE LECTURE DU FICHIER
+      		if(lit <= 0){
       			cout << "Erreur ouverture fichier" << endl;
       			pthread_exit((void *)1);
       		}
 
-      		while (nbOctetLu > 0 && termine == 0)
+      		//TANT QUON A PAS TOUT ENVOYE
+      		while (lit > 0)
 			{
-			nbOctetEnvoye = send(arg->descBr, buffer, nbOctetLu, 0); 
-
-			bzero(buffer, sizeof(buffer));
-			
-			if (nbOctetEnvoye < nbOctetLu)
-			{
-				perror("Erreur : send() du fichier");
-				termine = 1;
-			}
-			else
-			{
-				nbOctetLu = fread(buffer,sizeof(char),sizeof(buffer),fichierenvoi);
-			}
-			
+			//ON ENVOIE LE BLOC ET ON LIT LE SUIVANT	
+			envoi = send(arg->descBr, buffer, lit, 0); 
+			lit = fread(buffer,sizeof(char),sizeof(buffer),fichierenvoi);
 			}
 	      	cout <<"fichier bien envoyé" << endl;
-
-	      	
 			
 	      	fclose(fichierenvoi);
 	      	pthread_exit(0);
@@ -85,7 +83,6 @@ void* thread_envoi(void * args){
 
 void* thread_reception(void * args){
 
-	cout << "on est dans le nouveau thread" << endl;
 	//On récupère les arguments de la struct
 	char nomFichier[100];
 	infoFichier *arg = args;
@@ -100,40 +97,27 @@ void* thread_reception(void * args){
 		{ printf ("Erreur a l'ouverture du fichier\n"); 
 		pthread_exit(1);}
 
-		long nbOctetTotalRecu = 0;
-		int nbOctetEcris = 0;
+		long sizeRecu = 0;
+		int sizeEcrit = 0;
 		int termine = 0;		
 
-		int nbOctetRecu = read(arg->descBr, bufferReception, sizeof(bufferReception));
-		while(nbOctetRecu > 0 && termine==0)
-		{
-			nbOctetEcris = fwrite(bufferReception,sizeof(char),nbOctetRecu,fichier);
 
-			if (nbOctetEcris < nbOctetRecu)
-			{
-				perror("Erreur : write() du fichier");
-				termine = 1;
-			}
-			else
-			{
-				nbOctetTotalRecu = nbOctetTotalRecu + nbOctetEcris;
-			
+		// ON RECOIT LE PREMIER BLOC
+		int rec = read(arg->descBr, bufferReception, sizeof(bufferReception));
 
-				if (nbOctetTotalRecu == (arg->size))
-				{
+		//TANT QUON A PAS UN FICHIER DE LA TAILLE FINALE
+		while(rec > 0 && termine==0){
+			sizeEcrit = fwrite(bufferReception,sizeof(char),rec,fichier);
+				sizeRecu = sizeRecu + sizeEcrit;
+				if (sizeRecu == (arg->size)){
 					termine = 1;
 				}
-				else
-				{
-					
-					nbOctetRecu = read(arg->descBr, bufferReception, sizeof(bufferReception));
+				else{
+					rec = read(arg->descBr, bufferReception, sizeof(bufferReception));
 				}
-			}
-			
 		}
 
 	
-
 		cout << "Fichier reçu" << endl;
 		fclose(fichier);
 		cout << "\n" << endl;
@@ -170,6 +154,7 @@ int main(int argc, char* argv[]){
 		int connexion = connect(descBrCli, (struct sockaddr *)adrBrPub, lgAdrBrPub);
 		if(connexion == -1) {cout << "Echec de la connexion" << endl; exit(1);}
 
+		//ON RECUPERE L'ORDRE AU CLAVIER
 		char ordre[2];
 		cout << "Entrez 0 pour récuperer un fichier du serveur, 1 pour en envoyer un sur le serveur : " << endl;
 		cin >> ordre;
@@ -181,6 +166,7 @@ int main(int argc, char* argv[]){
 
 		cout << "ordre envoyé" << endl;
 
+		//SI ON VEUT RECUPERER UN FICHIER
 		if(ordre[0] == '0'){
 			char nomFichierReception[100];
 			cout << "Entrez le nom du fichier que vous voulez : " << endl;
@@ -195,8 +181,11 @@ int main(int argc, char* argv[]){
 			int retour = 0;
 
 			if(recv(descBrCli, &retour, sizeof(int), 0) <0){
-				cout << "le serveur à rencontré un problème avec le fichier"  << endl;
+				cout << "Erreur recv"  << endl;
 				exit(1);
+			}
+			if(retour == -1){
+				cout << "le fichier demandé n'existe pas" << endl;
 			}
 
 			long taille;
@@ -211,10 +200,14 @@ int main(int argc, char* argv[]){
 
 
 			if(retour > 0){
+			char nomfichierComplet[100];
+			strcpy(nomfichierComplet, "FichiersClient/" );
+			strcat(nomfichierComplet, nomfichier);	
+
 			infoFichier *args = malloc(sizeof *args);
         	args->descBr = descBrCli;
         	args->size = taille;
-        	strcpy(args->nom, nomfichier);
+        	strcpy(args->nom, nomfichierComplet);
 
         	if( pthread_create( &thread_id , NULL ,  thread_reception , args) < 0)
         	{
@@ -235,9 +228,13 @@ int main(int argc, char* argv[]){
 			cout << "Entrez le nom du fichier à envoyer : " << endl;
 			cin >> nomFichierLocal;
 
+			char nomfichier[100];
+			strcpy(nomfichier, "FichiersClient/" );
+			strcat(nomfichier, nomFichierLocal);
+
 			//on ouvre un pointeur sur le fichier choisi
       		FILE *fichierenvoi = NULL;
-      		fichierenvoi = fopen(nomFichierLocal,  "r");
+      		fichierenvoi = fopen(nomfichier,  "r");
       		//On vérifie que le fichier existe bien
       		if (fichierenvoi == NULL){
       			cout << "Le fichier n'existe pas" << endl;
@@ -245,7 +242,7 @@ int main(int argc, char* argv[]){
       		}
       		//On récupère le taille du fichier
       		struct stat statFile;
-    		stat(nomFichierLocal, &statFile);
+    		stat(nomfichier, &statFile);
       		close(fichierenvoi);
 
       		cout << "Entrez le nom sous lequel l'enregistrer  : " << endl;
@@ -272,12 +269,12 @@ int main(int argc, char* argv[]){
 			infoFichier *args = malloc(sizeof *args);
         	args->descBr = descBrCli;
         	args->size = &statFile.st_size;
-        	strcpy(args->nom, nomFichierLocal);
+        	strcpy(args->nom, nomfichier);
 
         	if( pthread_create( &thread_id , NULL ,  thread_envoi , args) < 0)
         	{
         	free(args);	
-            perror("Erreur création thread reception");
+            perror("Erreur création thread envoi");
             exit(1);
         	}
 

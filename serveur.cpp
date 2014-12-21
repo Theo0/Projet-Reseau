@@ -8,10 +8,14 @@
 #include <unistd.h>
 #include "sockdist.h"
 #include "sock.h"
+#include <list>
 
 using namespace std;
 
 int descBrCv;
+
+//Liste des fichiers occupés en écriture
+list<string> list_ocp; 
 
 void* thread_reception(void * arg){
 	//Création des buffers pour recevoir le fichier et pour recevoir son nom
@@ -81,7 +85,9 @@ void* thread_reception(void * arg){
 		cout << "Erreur lors de la création du fichier" << endl;
 		pthread_exit(1);
 	}
-	
+
+	//on ajoute le fichier sur la liste des fichiers occupés
+	list_ocp.push_back(nomFichier);
 
 
 	//RECEPTION DU FICHIER
@@ -110,6 +116,9 @@ void* thread_reception(void * arg){
 	}
 	cout << "fichier reçu" << endl;
 	fclose(fichierRecu);
+	//on supprime le fichier de la liste des fichiers occupés en ecriture
+	list_ocp.remove(nomFichier);
+
 	pthread_exit(0);
 }
 
@@ -132,6 +141,17 @@ void* thread_envoi(void * arg){
 	//ON OUVRE LE FICHIER A ENVOYER
 	FILE *f = fopen(nomfichier, "r");
 
+	//test si le fichier est dans la liste des fichiers occupés
+	bool occupe=false;
+	list<string>::iterator list_iter;
+	for(list_iter = list_ocp.begin(); list_iter != list_ocp.end(); list_iter++)
+	{
+		if (*list_iter==nomfichier)
+		{
+			occupe=true;
+		}
+	}
+
 	//SI LE FICHIER N'EXISTE PAS, ON RETOURNE UNE ERREUR AU CLIENT
 	if(f == NULL){
 		cout << "le fichier n'existe pas" << endl;
@@ -140,6 +160,16 @@ void* thread_envoi(void * arg){
 		if(env < 0){
 			cout << "erreur envoi message derreur" << endl;
  		}
+ 		pthread_exit(1);
+	}
+	else if (occupe){
+		cout << "le fichier demandé est en cours de depot." << endl;
+		int error = -2;
+		env = send(socket, &error, sizeof(int), 0);
+		if(env < 0){
+			cout << "erreur envoi message derreur fichier en cours de dépot" << endl;
+ 		}
+ 		pthread_exit(1);
 	}
 	//SINON ON ENVOIE LA CONFIRMATION AU CLIENT
 	else{
@@ -157,6 +187,7 @@ void* thread_envoi(void * arg){
 		//ON ENVOIE LA TAILLE DU FICHIER AU CLIENT
  		if((env = send(socket, &taille, sizeof(long), 0))<0){
  			cout << "Erreur envoi taille" << endl;
+ 			pthread_exit(1);
  		}
 
 
@@ -229,6 +260,8 @@ void* connection_handler(void * arg2){
 
 int main(int argc, char **arv){
 
+	cout<<"Lancement du serveur......."<<endl;
+	cout<<"===========================\n"<<endl;
 
 	Sock brPub(SOCK_STREAM, (short)(10514),0);
 	int descBrPub;

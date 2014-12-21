@@ -186,12 +186,19 @@ int main(int argc, char* argv[]){
 			}
 			if(retour == -1){
 				cout << "le fichier demandé n'existe pas" << endl;
+				exit(1);
+			}
+			if(retour == -2){
+				cout << "le fichier demandé est en cours dépot sur le serveur." << endl;
+				cout<< "veuillez retenter l'opération dans quelques instants..."<<endl;
+				exit(1);			
 			}
 
 			long taille;
 
 			if(recv(descBrCli, &taille, sizeof(long), 0) < 0){
 				cout << "Erreur lors de la réception de la taille du fichier" << endl;
+				exit(1);
 			}
 
 			cout << "Entrer le nom sous lequel vous souhaitez sauvegarder le fichier : " ;

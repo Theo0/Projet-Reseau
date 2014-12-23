@@ -156,7 +156,7 @@ int main(int argc, char* argv[]){
 
 		//ON RECUPERE L'ORDRE AU CLAVIER
 		char ordre[2];
-		cout << "Entrez 0 pour récuperer un fichier du serveur, 1 pour en envoyer un sur le serveur : " << endl;
+		cout << "Entrez 0 pour récuperer un fichier du serveur, 1 pour en envoyer un sur le serveur, 2 pour quitter : " << endl;
 		cin >> ordre;
 
 		if(int envoi = send(descBrCli, ordre, strlen(ordre), 0) < 0){
@@ -184,46 +184,49 @@ int main(int argc, char* argv[]){
 				cout << "Erreur recv"  << endl;
 				exit(1);
 			}
-			if(retour == -1){
-				cout << "le fichier demandé n'existe pas" << endl;
-				exit(1);
-			}
-			if(retour == -2){
-				cout << "le fichier demandé est en cours dépot sur le serveur." << endl;
-				cout<< "veuillez retenter l'opération dans quelques instants..."<<endl;
-				exit(1);			
-			}
+			switch(retour)
+			{
+				case -1:
+						cout << "le fichier demandé n'existe pas" << endl;
+						break;
+				case -2:
+						cout << "le fichier demandé est en cours dépot sur le serveur." << endl;
+						cout<< "veuillez retenter l'opération dans quelques instants..."<<endl;
+						break;
+				default:
+						long taille;
 
-			long taille;
+						if(recv(descBrCli, &taille, sizeof(long), 0) < 0){
+							cout << "Erreur lors de la réception de la taille du fichier" << endl;
+							exit(1);
+						}
 
-			if(recv(descBrCli, &taille, sizeof(long), 0) < 0){
-				cout << "Erreur lors de la réception de la taille du fichier" << endl;
-				exit(1);
-			}
-
-			cout << "Entrer le nom sous lequel vous souhaitez sauvegarder le fichier : " ;
-					char nomfichier[100];
-					cin >> nomfichier;
+						cout << "Entrer le nom sous lequel vous souhaitez sauvegarder le fichier : " ;
+						char nomfichier[100];
+						cin >> nomfichier;
 
 
-			if(retour > 0){
-			char nomfichierComplet[100];
-			strcpy(nomfichierComplet, "FichiersClient/" );
-			strcat(nomfichierComplet, nomfichier);	
+						if(retour > 0){
+							char nomfichierComplet[100];
+							strcpy(nomfichierComplet, "FichiersClient/" );
+							strcat(nomfichierComplet, nomfichier);	
 
-			infoFichier *args = malloc(sizeof *args);
-        	args->descBr = descBrCli;
-        	args->size = taille;
-        	strcpy(args->nom, nomfichierComplet);
+							infoFichier *args = malloc(sizeof *args);
+        					args->descBr = descBrCli;
+        					args->size = taille;
+        					strcpy(args->nom, nomfichierComplet);
 
-        	if( pthread_create( &thread_id , NULL ,  thread_reception , args) < 0)
-        	{
-        	free(args);	
-            perror("Erreur création thread reception");
-            exit(1);
-        	}
+        					if( pthread_create( &thread_id , NULL ,  thread_reception , args) < 0)
+        					{
+        						free(args);	
+            					perror("Erreur création thread reception");
+            					exit(1);
+        					}
 
-			}
+						}
+						break;
+
+			}			
 
 		}
 		else if(ordre[0] == '1'){
@@ -243,49 +246,63 @@ int main(int argc, char* argv[]){
       		FILE *fichierenvoi = NULL;
       		fichierenvoi = fopen(nomfichier,  "r");
       		//On vérifie que le fichier existe bien
+      		int exist=0;
       		if (fichierenvoi == NULL){
-      			cout << "Le fichier n'existe pas" << endl;
-      			exit(1);
+      			exist=-1;
       		}
-      		//On récupère le taille du fichier
-      		struct stat statFile;
-    		stat(nomfichier, &statFile);
-      		close(fichierenvoi);
+      		switch(exist)
+      		{
+      			case -1:
+      					cout << "Le fichier n'existe pas" << endl;
+      					break;
+      			default:
+      					//On récupère le taille du fichier
+      					struct stat statFile;
+    					stat(nomfichier, &statFile);
+      					close(fichierenvoi);
 
-      		cout << "Entrez le nom sous lequel l'enregistrer  : " << endl;
-			cin >> nomFichierEnvoi;
-			int envoi = send(descBrCli, nomFichierEnvoi, strlen(nomFichierEnvoi), 0);
-			if(envoi < 0){
-				cout << "erreur lors de l'envoi du nom du fichier";
-				exit(1);
-			}
+      					cout << "Entrez le nom sous lequel l'enregistrer  : " << endl;
+						cin >> nomFichierEnvoi;
+						int envoi = send(descBrCli, nomFichierEnvoi, strlen(nomFichierEnvoi), 0);
+						if(envoi < 0){
+							cout << "erreur lors de l'envoi du nom du fichier";
+							exit(1);
+						}
 
-			retour = 0;
-			if(recv(descBrCli, &retour, sizeof(int), 0) <0){
-				cout << "le serveur à rencontré un problème avec le fichier"  << endl;
-				exit(1);
-			}
-			long taille = statFile.st_size;
-			envoi = send(descBrCli, &taille, sizeof(long), 0);{
-				if(envoi == -1){
-					cout << "Erreur envoi taille fichier " << strerror(errno) <<endl;
-					exit(1);
-				}
-			}
+						retour = 0;
+						if(recv(descBrCli, &retour, sizeof(int), 0) <0){
+							cout << "le serveur à rencontré un problème avec le fichier"  << endl;
+							exit(1);
+						}
+						long taille = statFile.st_size;
+						envoi = send(descBrCli, &taille, sizeof(long), 0);
+						if(envoi == -1){
+							cout << "Erreur envoi taille fichier " << strerror(errno) <<endl;
+							exit(1);
+						}
+						
 
-			infoFichier *args = malloc(sizeof *args);
-        	args->descBr = descBrCli;
-        	args->size = &statFile.st_size;
-        	strcpy(args->nom, nomfichier);
+						infoFichier *args = malloc(sizeof *args);
+        				args->descBr = descBrCli;
+        				args->size = &statFile.st_size;
+        				strcpy(args->nom, nomfichier);
 
-        	if( pthread_create( &thread_id , NULL ,  thread_envoi , args) < 0)
-        	{
-        	free(args);	
-            perror("Erreur création thread envoi");
-            exit(1);
-        	}
+        				if( pthread_create( &thread_id , NULL ,  thread_envoi , args) < 0)
+        				{
+        					free(args);	
+            				perror("Erreur création thread envoi");
+            				exit(1);
+        				}
+        				break;
 
+      		}
+      		
         	
+		}
+		else if (ordre[0] == '2')
+		{
+			cout<< "Déconnexion du client ..." <<endl;
+			exit(0);
 		}
 
 	}

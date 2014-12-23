@@ -29,10 +29,18 @@ void* thread_reception(void * arg){
 
 	cout << "Attente des informations de reception" << endl;
 
+
 	//Reception du nom du fichier
 	int recep = recv(socket, bufferNomFichier, sizeof(bufferNomFichier), 0);
 	if(recep == -1){
 		cout << "erreur reception nom fichier" << endl;
+		pthread_exit(1);
+	}
+	if(bufferNomFichier[0] == '-1'){
+		pthread_exit(1);
+	}
+	//Si on a reçu un buffer vide, on interromp
+	if(bufferNomFichier[0] == '\0'){
 		pthread_exit(1);
 	}
 	cout << "Nom du fichier recu : " << bufferNomFichier << endl;
@@ -133,6 +141,7 @@ void* thread_envoi(void * arg){
 	int recep = recv(socket, bufferReception, sizeof(bufferReception), 0);
 	if(recep < 0){
 		cout << "Erreur reception nom fichier" << endl;
+		pthread_exit(1);
 	}
 
 	char nomfichier[100];
@@ -177,6 +186,7 @@ void* thread_envoi(void * arg){
 		env = send(socket, &conf, sizeof(int), 0);
 		if(env < 0){
 			cout << "erreur envoi message confirmation" << endl;
+			pthread_exit(1);
  		}
 
  		//CALCULE DE LA TAILLE DU FICHIER
